@@ -153,7 +153,7 @@ class Dataset:
         if isinstance(mask, np.ndarray):
             self.mask = mask
         else:
-            self.mask = np.ones(self.pump_off.shape)
+            self.mask = np.ones(self.pump_off.shape, dtype=bool)
 
         # get delay time steps, smallest delay time is arbitrarily set to 0 ps
         if self.progress:

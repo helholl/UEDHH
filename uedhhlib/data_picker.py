@@ -4,7 +4,7 @@ import sys
 import pyqtgraph as pg
 from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtGui import QKeySequence
-from PyQt5 import QtWidgets
+from pyqtgraph.Qt import QtWidgets, QtGui
 import numpy as np
 from re import findall
 
@@ -27,11 +27,11 @@ class DataPicker(QtWidgets.QMainWindow):
         self.timestamps = timestamps
         self.loaded_files = loaded_files
         self.lris = []
-        self.shortcut_add_lri = QtWidgets.QShortcut(QKeySequence("+"), self)
+        self.shortcut_add_lri = QtGui.QShortcut(QtGui.QKeySequence("+"), self)
         self.shortcut_add_lri.activated.connect(self.add_lri)
-        self.shortcut_remove_lri = QtWidgets.QShortcut(QKeySequence("-"), self)
+        self.shortcut_remove_lri = QtGui.QShortcut(QtGui.QKeySequence("-"), self)
         self.shortcut_remove_lri.activated.connect(self.remove_lri)
-        self.shortcut_print_rule = QtWidgets.QShortcut(QKeySequence("space"), self)
+        self.shortcut_print_rule = QtGui.QShortcut(QtGui.QKeySequence("space"), self)
         self.shortcut_print_rule.activated.connect(self.print_rule)
 
         self.graphics_layout = pg.GraphicsLayoutWidget()
@@ -119,4 +119,4 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     win = DataPicker(timestamps, intensities, loaded_files)
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

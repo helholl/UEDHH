@@ -1,5 +1,4 @@
 ### This tool is adapted from Laurenz Kremeyer, Siwick group, McGill University, Montreal
-
 import sys
 import pyqtgraph as pg
 from PyQt5.QtCore import pyqtSlot
@@ -7,6 +6,7 @@ from PyQt5.QtGui import QKeySequence
 from pyqtgraph.Qt import QtWidgets, QtGui
 import numpy as np
 from re import findall
+from datetime import datetime
 
 from argparse import ArgumentParser
 
@@ -34,16 +34,14 @@ class DataPicker(QtWidgets.QMainWindow):
         self.shortcut_print_rule = QtGui.QShortcut(QtGui.QKeySequence("space"), self)
         self.shortcut_print_rule.activated.connect(self.print_rule)
 
+
         self.graphics_layout = pg.GraphicsLayoutWidget()
         self.plot = self.graphics_layout.addPlot(
-            y=intensities, axisItem={"bottom": pg.DateAxisItem()}
-        )
-        self.plot.setLimits(
-            xMin=0,
-            xMax=len(self) - 1,
-            yMin=self.plot.viewRange()[1][0],
-            yMax=self.plot.viewRange()[1][1],
-        )
+            axisItems={"bottom": pg.DateAxisItem()}
+            )
+        self.curve = self.plot.plot(intensities)
+        self.plot.enableAutoRange(axis=pg.ViewBox.YAxis)
+
         self.setCentralWidget(self.graphics_layout)
         self.show()
 
@@ -116,6 +114,7 @@ if __name__ == "__main__":
         timestamps = hf["real_time/timestamps"][()]
         intensities = hf["real_time/intensity"][()]
         loaded_files = hf["real_time/loaded_files"][()]
+
 
     app = QtWidgets.QApplication(sys.argv)
     win = DataPicker(timestamps, intensities, loaded_files)

@@ -1,8 +1,8 @@
-# uedhh
+# uedhhlib
 
-- contains uedhhlib which is a collection of tools to analyze electron diffraction data recorded at MPSD - November 24. 
+- is a package containing dataset.py which is the class definition for electron diffraction datasets (recorded at MPSD - November 24) and utils.py which is a collection of tools to analyze the data. 
 
-- data_picker is a tool to manually check for arcs in the overall intensity of all images and extract a list of files to ignore during loading
+- data_picker.py is a tool to manually check for arcs in the overall intensity of all images and extract a list of files to ignore during loading
 
 
 
@@ -15,6 +15,8 @@ required packages are
 - ```pillow```
 - ```tqdm```
 - ```h5py```
+- ```scipy```
+- ```lmfit```
 
 
 ## uedhhlb
@@ -34,7 +36,7 @@ dset.save("processed.h5")
 ## data_picker
 How to use
 ```shell
-python data_picker.py path/to/processed.h5
+python uedhhlib.data_picker.py path/to/processed.h5
 ```
 
 This opens a window showing the absolute intensity of all recorded images on a lab time equivalent axis. With "+" you can add a ROI and move it with the mouse to a region you want to ignore. After all ROIs are added, press "space" which will print a list in the command window containing all tuples with file identifiers which is readable by the DataSet class. Use this list as

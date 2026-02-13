@@ -129,6 +129,12 @@ class Dataset:
         self.real_time_intensities = []
         self.loaded_files = []
         self.timestamps = []
+        self.real_time_intensities_unpumped = []
+        self.loaded_files_unpumped = []
+        self.timestamps_unpumped = []
+        self.real_time_intensities_short = []
+        self.loaded_files_short = []
+        self.timestamps_short = []
 
         # load pump off files
         if self.progress:
@@ -190,11 +196,12 @@ class Dataset:
         self.data = self.data[::-1]
 
         # here we sort the image intensities, loaded files and images according the lab time they were recorded
-        if self.all_imgs_flag:
+        if self.all_imgs_flag: #here not yet using individual timestamps for pumped, unpumped and short
             (
                 self.timestamps,
                 self.all_imgs,
                 self.real_time_intensities,
+                self.real_time_intensities_unpumped,
                 self.loaded_files,
             ) = zip(
                 *sorted(
@@ -202,6 +209,7 @@ class Dataset:
                         self.timestamps,
                         self.all_imgs,
                         self.real_time_intensities,
+                        self.real_time_intensities_unpumped,
                         self.loaded_files,
                     )
                 )
@@ -212,8 +220,20 @@ class Dataset:
                     zip(self.timestamps, self.real_time_intensities, self.loaded_files)
                 )
             )
+            self.timestamps_unpumped, self.real_time_intensities_unpumped, self.loaded_files_unpumped = zip(
+                *sorted(
+                    zip(self.timestamps_unpumped, self.real_time_intensities_unpumped, self.loaded_files_unpumped)
+                )
+            )
+            self.timestamps_short, self.real_time_intensities_short, self.loaded_files_short = zip(
+                *sorted(
+                    zip(self.timestamps_short, self.real_time_intensities_short, self.loaded_files_short)
+                )
+            )
 
         self.timestamps = [timestamp.isoformat() for timestamp in self.timestamps]
+        self.timestamps_unpumped = [timestamp.isoformat() for timestamp in self.timestamps_unpumped]
+        self.timestamps_short = [timestamp.isoformat() for timestamp in self.timestamps_short]
 
     def save(self, filename: PathLike):
         """
@@ -288,11 +308,11 @@ class Dataset:
                     # correct laser background
                     if self.correct_laser:
                         if self.hotpx_removal:
-                            _, self.pump_only = self.hotpixel_filter(self.pump_only)
+                            _, self.pump_only = hotpixel_filter(self.pump_only)
                         _img -= self.pump_only
                     # remove hot pixels
                     if self.hotpx_removal:
-                        _, _img = self.hotpixel_filter(_img)
+                        _, _img = hotpixel_filter(_img)
                     self.real_time_intensities.append(_img.sum())
                     self.loaded_files.append(join(_cycle_path, file))
 
@@ -359,18 +379,47 @@ class Dataset:
         """
         loads the pump off data of all cycles and makes a mean pump off image from all of them
         """
-        self.pump_offs = []
-        for cycle in self.cycles:
-            _cycle_path = join(self.basedir, f"Cycle {int(cycle)}")
+        _pump_offs = []
+        for cycle in tqdm(self.cycles):
             _pump_off_list = []
+            _cycle_path = join(self.basedir, f"Cycle {int(cycle)}")
             for file in listdir(_cycle_path):
-                if "ProbeOnPumpOff" in file and file.endswith(".npy"):
+                if "ProbeOnPumpOff" in file and "short" not in file and file.endswith(".npy") and join(_cycle_path, file.replace('PumpOff','PumpOn')) not in self.ignored_files:
                     _pump_off_list.append(join(_cycle_path, file))
+                    _pump_offs.append(join(_cycle_path, file))
 
-            for pumpoff in sorted(_pump_off_list):
-                self.pump_offs.append(np.load(pumpoff))
+            for pumpoff in sorted(_pump_off_list): 
+                pumpoff_img = np.load(pumpoff)
+                # if self.hotpx_removal:
+                #     _, pumpoff_img = hotpixel_filter(pumpoff_img) #probably not neccessairy
+                self.real_time_intensities_unpumped.append(((pumpoff_img - self.bckgr)* self.mask).sum())
+                self.loaded_files_unpumped.append(pumpoff)
+                
+                # extract epoch timestamp from server-path of loaded file
+                _serverpath_file = pumpoff.split(".")[0] + ".txt"
+                with open(join(_cycle_path, _serverpath_file), "r") as f:
+                        self.timestamps_unpumped.append(
+                            datetime.fromtimestamp(
+                                int(findall(r"(?<=\\A2\\)\d+", f.readlines()[1])[0])
+                            )
+                        )
 
-        self.pump_off = np.mean(np.array(self.pump_offs), axis=0)
+        if _pump_offs:
+            sum_pump_offs = None
+            n = 0
+            for pumpoff in sorted(_pump_offs): 
+                img = np.load(pumpoff).astype(np.float64)
+                if self.hotpx_removal:
+                    _, img = hotpixel_filter(img)
+                img = (img - self.bckgr) * self.mask
+                if sum_pump_offs is None:
+                    sum_pump_offs = img
+                else:
+                    sum_pump_offs += img
+                n += 1
+            self.pump_off = sum_pump_offs/n
+        else:
+            self.pump_off = np.zeros(self.bckgr.shape)
 
     def _load_pump_only(self):
         """
@@ -389,75 +438,75 @@ class Dataset:
 
         self.pump_only = np.mean(np.array(self.pump_onlys), axis=0)
 
-    def hotpixel_filter(self, data, tolerance=3, size=10, method: str = "mad_local"):
-        """
-        Reduce the noise in the given 2D dataset.
-        Returns the positions of outliers and the corrected image.
+def hotpixel_filter(data, tolerance=3, size=10, method: str = "mad_local"):
+    """
+    Reduce the noise in the given 2D dataset.
+    Returns the positions of outliers and the corrected image.
 
-        Implemented methods for outlier detection (check corresponding functions for details):
-        - "mad": Median absolute deviation
-        - "mad_local": Median absolute deviation of nearest neighbors.
-        - "std_local": Standard deviation of nearest neighbors (very slow)
-        """
-        # The data type of the original images is an unsigned int which is not very practical for calculating.
-        if data.dtype != "float64":
-            data = np.array(data, dtype="float64")
+    Implemented methods for outlier detection (check corresponding functions for details):
+    - "mad": Median absolute deviation
+    - "mad_local": Median absolute deviation of nearest neighbors.
+    - "std_local": Standard deviation of nearest neighbors (very slow)
+    """
+    # The data type of the original images is an unsigned int which is not very practical for calculating.
+    if data.dtype != "float64":
+        data = np.array(data, dtype="float64")
 
-        blurred = median_filter(data, size=size)
-        match method.lower():
-            case "mad":
-                outliers = self.find_outlier_pixels_mad(data, blurred, tolerance, size)
-            case "mad_local":
-                outliers = self.find_outlier_pixels_mad_local(
-                    data, blurred, tolerance, size
-                )
-            case "std_local":
-                outliers = self.find_outlier_pixels_std(data, blurred, tolerance, size)
-            case _:
-                raise ValueError(
-                    f"Unknown method {method}. Allowed values are ['mad', 'mad_local', 'std_local']."
-                )
+    blurred = median_filter(data, size=size)
+    match method.lower():
+        case "mad":
+            outliers = find_outlier_pixels_mad(data, blurred, tolerance, size)
+        case "mad_local":
+            outliers = find_outlier_pixels_mad_local(
+                data, blurred, tolerance, size
+            )
+        case "std_local":
+            outliers = find_outlier_pixels_std(data, blurred, tolerance, size)
+        case _:
+            raise ValueError(
+                f"Unknown method {method}. Allowed values are ['mad', 'mad_local', 'std_local']."
+            )
 
-        fixed_image = np.copy(data)  # This is the image with the hot pixels removed
-        for y, x in zip(outliers[0], outliers[1]):
-            fixed_image[y, x] = blurred[y, x]
+    fixed_image = np.copy(data)  # This is the image with the hot pixels removed
+    for y, x in zip(outliers[0], outliers[1]):
+        fixed_image[y, x] = blurred[y, x]
 
-        return outliers, fixed_image
+    return outliers, fixed_image
 
-    def find_outlier_pixels_mad(self, data, blurred, tolerance, size):
-        """Find outliers with the median absolut deviation (MAD)"""
-        difference = np.abs(data - blurred)
+def find_outlier_pixels_mad(data, blurred, tolerance, size):
+    """Find outliers with the median absolut deviation (MAD)"""
+    difference = np.abs(data - blurred)
 
-        # Allow the difference of a pixel and the median of the whole image
-        # to be `tolerance` times larger than the median of the whole image of differences.
-        MAD = np.median(difference)
-        k = 1.4826  # from https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
-        threshold = tolerance * MAD * k
+    # Allow the difference of a pixel and the median of the whole image
+    # to be `tolerance` times larger than the median of the whole image of differences.
+    MAD = np.median(difference)
+    k = 1.4826  # from https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
+    threshold = tolerance * MAD * k
 
-        # find the hot pixels
-        outliers = np.nonzero(difference > threshold)
-        return outliers
+    # find the hot pixels
+    outliers = np.nonzero(difference > threshold)
+    return outliers
 
-    def find_outlier_pixels_mad_local(self, data, blurred, tolerance, size):
-        """Find outliers with the median absolut deviation (MAD)"""
-        difference = np.abs(data - blurred)
+def find_outlier_pixels_mad_local(data, blurred, tolerance, size):
+    """Find outliers with the median absolut deviation (MAD)"""
+    difference = np.abs(data - blurred)
 
-        # Allow the difference of a pixel and its local median
-        # to be `tolerance` times larger than the local median of differences.
-        MAD = median_filter(difference, size=size)
-        k = 1.4826  # from https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
-        threshold = tolerance * MAD * k
+    # Allow the difference of a pixel and its local median
+    # to be `tolerance` times larger than the local median of differences.
+    MAD = median_filter(difference, size=size)
+    k = 1.4826  # from https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
+    threshold = tolerance * MAD * k
 
-        # find the hot pixels
-        outliers = np.nonzero(difference > threshold)
-        return outliers
+    # find the hot pixels
+    outliers = np.nonzero(difference > threshold)
+    return outliers
 
-    def find_outlier_pixels_std(self, data, blurred, tolerance, size):
-        """Find outliers by finding the standard deviation in a local window (based on size)."""
-        difference = data - blurred
-        threshold = tolerance * generic_filter(difference, np.std, size=size)
-        outliers = np.nonzero(np.abs(difference) > threshold)
-        return outliers
+def find_outlier_pixels_std(data, blurred, tolerance, size):
+    """Find outliers by finding the standard deviation in a local window (based on size)."""
+    difference = data - blurred
+    threshold = tolerance * generic_filter(difference, np.std, size=size)
+    outliers = np.nonzero(np.abs(difference) > threshold)
+    return outliers
 
 
 def pvoigt_2d(

@@ -19,7 +19,7 @@ def remove_hpx_from_dataset(
         file_patterns: List[str] = None,
         progress: bool = True
     ):
-    """
+    r"""
     Remove hot pixels from all .npy images in a dataset and save to new directory.
     
     Parameters
@@ -49,15 +49,16 @@ def remove_hpx_from_dataset(
     --------
     >>> from uedhhlib.tools.preprocessing import remove_hot_pixels_from_dataset
     >>> 
-    >>> remove_hot_pixels_from_dataset(
-    ...     input_dir=r"Z:\Users\Emma\Zyla1\2026_01\Netztraeger42\260112\perylene\Meas1",
-    ...     output_dir=rZ:\Users\Emma\Zyla1\2026_01\Netztraeger42\260112\perylene\Meas1_hprmv,
+    >>> remove_hpx_from_dataset(
+    ...     input_dir=r"Z:\\Users\Emma\Zyla1\2026_01\Netztraeger42\260112\perylene\Meas1",
+    ...     output_dir=rZ:\\Users\Emma\Zyla1\2026_01\Netztraeger42\260112\perylene\Meas1_hprmv,
     ...     cycles=[1, 2, 3, 4, 5],
     ...     tolerance=3
     ... )
     """
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # detect cycles if not specified
     if cycles is None:

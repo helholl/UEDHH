@@ -67,7 +67,7 @@ class StaticDataSet:
         return np.array(Image.open(filepath), dtype=np.float32)
 
 
-class Dataset:
+class PumpedDataset:
     def __init__(
         self,
         basedir: PathLike,
@@ -140,6 +140,11 @@ class Dataset:
         if self.progress:
             print("loading pump offs")
         self._load_pump_offs()
+
+        #load short pump off files
+        if self.progress:
+            print("loading short pump offs")
+        self._load_shorts()
 
         # load laser only files
         if self.progress:
@@ -421,6 +426,27 @@ class Dataset:
         else:
             self.pump_off = np.zeros(self.bckgr.shape)
 
+    def _load_shorts(self):
+        """
+        loads the short pump off data of all cycles and makes a mean pump off image from all of them
+        """
+        self.shorts = []
+        for cycle in tqdm(self.cycles):
+            _cycle_path = join(self.basedir, f"Cycle {int(cycle)}")
+            _short_list = []
+            for file in listdir(_cycle_path):
+                if "ProbeOnPumpOff_short" in file and file.endswith(".npy"):
+                    _short_list.append(join(_cycle_path, file))
+
+            for short in sorted(_short_list):
+                self.shorts.append(np.load(short))
+
+        if self.shorts:
+            self.short = np.mean(np.array(self.shorts), axis=0)
+        else:
+            self.short = np.zeros(self.bckgr.shape)
+
+
     def _load_pump_only(self):
         """
         loads the pump only data of all cycles and makes a mean pump off image from all of them
@@ -438,7 +464,9 @@ class Dataset:
 
         self.pump_only = np.mean(np.array(self.pump_onlys), axis=0)
 
-def hotpixel_filter(data, tolerance=3, size=10, method: str = "mad_local"):
+        
+
+def hotpixel_filter(data, tolerance=3, size=10):
     """
     Reduce the noise in the given 2D dataset.
     Returns the positions of outliers and the corrected image.
@@ -453,18 +481,8 @@ def hotpixel_filter(data, tolerance=3, size=10, method: str = "mad_local"):
         data = np.array(data, dtype="float64")
 
     blurred = median_filter(data, size=size)
-    match method.lower():
-        case "mad":
-            outliers = find_outlier_pixels_mad(data, blurred, tolerance, size)
-        case "mad_local":
-            outliers = find_outlier_pixels_mad_local(
+    outliers = find_outlier_pixels_mad_local(
                 data, blurred, tolerance, size
-            )
-        case "std_local":
-            outliers = find_outlier_pixels_std(data, blurred, tolerance, size)
-        case _:
-            raise ValueError(
-                f"Unknown method {method}. Allowed values are ['mad', 'mad_local', 'std_local']."
             )
 
     fixed_image = np.copy(data)  # This is the image with the hot pixels removed
@@ -472,20 +490,6 @@ def hotpixel_filter(data, tolerance=3, size=10, method: str = "mad_local"):
         fixed_image[y, x] = blurred[y, x]
 
     return outliers, fixed_image
-
-def find_outlier_pixels_mad(data, blurred, tolerance, size):
-    """Find outliers with the median absolut deviation (MAD)"""
-    difference = np.abs(data - blurred)
-
-    # Allow the difference of a pixel and the median of the whole image
-    # to be `tolerance` times larger than the median of the whole image of differences.
-    MAD = np.median(difference)
-    k = 1.4826  # from https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
-    threshold = tolerance * MAD * k
-
-    # find the hot pixels
-    outliers = np.nonzero(difference > threshold)
-    return outliers
 
 def find_outlier_pixels_mad_local(data, blurred, tolerance, size):
     """Find outliers with the median absolut deviation (MAD)"""
@@ -499,13 +503,6 @@ def find_outlier_pixels_mad_local(data, blurred, tolerance, size):
 
     # find the hot pixels
     outliers = np.nonzero(difference > threshold)
-    return outliers
-
-def find_outlier_pixels_std(data, blurred, tolerance, size):
-    """Find outliers by finding the standard deviation in a local window (based on size)."""
-    difference = data - blurred
-    threshold = tolerance * generic_filter(difference, np.std, size=size)
-    outliers = np.nonzero(np.abs(difference) > threshold)
     return outliers
 
 

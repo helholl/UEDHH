@@ -5,7 +5,7 @@ from os import PathLike, listdir
 from os.path import join, isfile
 from re import findall
 from scipy.constants import speed_of_light
-from scipy.ndimage import median_filter, generic_filter
+from scipy.ndimage import median_filter
 from tqdm import tqdm
 from datetime import datetime
 from lmfit.model import Model, ModelResult
@@ -132,24 +132,7 @@ class PumpedDataset:
         self.real_time_intensities_unpumped = []
         self.loaded_files_unpumped = []
         self.timestamps_unpumped = []
-        self.real_time_intensities_short = []
-        self.loaded_files_short = []
-        self.timestamps_short = []
 
-        # load pump off files
-        if self.progress:
-            print("loading pump offs")
-        self._load_pump_offs()
-
-        #load short pump off files
-        if self.progress:
-            print("loading short pump offs")
-        self._load_shorts()
-
-        # load laser only files
-        if self.progress:
-            print("loading pump only")
-        self._load_pump_only()
 
         # make list of ignored files
         if self.ignore:
@@ -160,11 +143,28 @@ class PumpedDataset:
         else:
             self.ignored_files = []
 
+        # load background files
+        if self.progress:
+            print("loading background images")
+        self._load_bckgr()
+
         # infere standard mask from pump off shape
         if isinstance(mask, np.ndarray):
-            self.mask = mask
+            self.mask = mask.astype(bool)
         else:
-            self.mask = np.ones(self.pump_off.shape, dtype=bool)
+            self.mask = np.ones(self.bckgr.shape, dtype=bool)
+
+        
+        # #load short pump off files
+        # if self.progress:
+        #     print("loading short pump offs")
+        # self._load_shorts()
+
+        # load laser only files
+        if self.progress:
+            print("loading pump only")
+        self._load_pump_only()
+
 
         # get delay time steps, smallest delay time is arbitrarily set to 0 ps
         if self.progress:
@@ -175,12 +175,17 @@ class PumpedDataset:
             for position in self.stage_positions
         ]
 
-        # this array stores how many times a delay time step has no entry per cycle because all frames of a cycle at this state position had to be ignored due to arcing
+        #load pump off files
+        if self.progress:
+            print("loading pump offs")
+        self._load_pump_offs()
+
+        # this array stores how many times a delay time step has no entry per cycle because all frames of a cycle at this state position had to be ignored due to arcing or due to skipping this position for unknown reasons 
         self._empties = np.zeros(len(self.delay_times))
 
         # This is were all the data from each cycle is loaded and averaged
         self.data = np.zeros(
-            (len(self.delay_times), self.pump_off.shape[0], self.pump_off.shape[1])
+            (len(self.delay_times), self.bckgr.shape[0], self.bckgr.shape[1])
         )
         if self.progress:
             print("loading cycles")
@@ -201,7 +206,7 @@ class PumpedDataset:
         self.data = self.data[::-1]
 
         # here we sort the image intensities, loaded files and images according the lab time they were recorded
-        if self.all_imgs_flag: #here not yet using individual timestamps for pumped, unpumped and short
+        if self.all_imgs_flag: #here not yet using individual timestamps for pumped and unpumped
             (
                 self.timestamps,
                 self.all_imgs,
@@ -230,15 +235,11 @@ class PumpedDataset:
                     zip(self.timestamps_unpumped, self.real_time_intensities_unpumped, self.loaded_files_unpumped)
                 )
             )
-            self.timestamps_short, self.real_time_intensities_short, self.loaded_files_short = zip(
-                *sorted(
-                    zip(self.timestamps_short, self.real_time_intensities_short, self.loaded_files_short)
-                )
-            )
 
         self.timestamps = [timestamp.isoformat() for timestamp in self.timestamps]
         self.timestamps_unpumped = [timestamp.isoformat() for timestamp in self.timestamps_unpumped]
-        self.timestamps_short = [timestamp.isoformat() for timestamp in self.timestamps_short]
+        
+
 
     def save(self, filename: PathLike):
         """
@@ -249,6 +250,7 @@ class PumpedDataset:
         filename : PathLike
             filepath
         """
+
         with h5py.File(filename, "w") as f:
             f.create_dataset("time_points", data=self.delay_times)
             f.create_dataset("valid_mask", data=~self.mask)
@@ -258,13 +260,14 @@ class PumpedDataset:
             realtime_group = f.create_group("real_time")
             realtime_group.create_dataset("intensity", data=self.real_time_intensities)
             realtime_group.create_dataset("loaded_files", data=self.loaded_files)
-            realtime_group.create_dataset("timestamps", data=self.timestamps)
-            if self.all_imgs_flag:
-                realtime_group.create_dataset("all_imgs", data=self.all_imgs)
+            realtime_group.create_dataset("timestamps", data=np.array(self.timestamps, dtype="S"))
+            realtime_group.create_dataset("intensity_unpumped", data=self.real_time_intensities_unpumped)
+            realtime_group.create_dataset("loaded_files_unpumped", data=self.loaded_files_unpumped)
+            realtime_group.create_dataset("timestamps_unpumped", data=np.array(self.timestamps_unpumped, dtype="S"))
 
     def _load_cycle(self, cycle: int) -> list:
         """
-        loads the data of cycle one.
+        loads the data of one cycle.
 
         Parameters
         ----------
@@ -281,43 +284,55 @@ class PumpedDataset:
         cycle_data = []
         for _idx, position in enumerate(self.stage_positions):
             _position_files = []
-            _name = f"z_ProbeOnPumpOn_{str(position).replace(".",",")} mm_Frm"
-            if isinstance(self.ignore, list):
-                for file in _filelist:
-                    if (
-                        _name in file
-                        and file.endswith(".npy")
-                        and join(_cycle_path, file) not in self.ignored_files
-                    ):
-                        _position_files.append(file)
-            else:
-                for file in _filelist:
-                    if (
-                        _name in file
-                        and file.endswith(".npy")
-                        and join(_cycle_path, file)
-                    ):  # the "and join(...)" condition at the end is unnecessary and should be deleted in future versions
-                        _position_files.append(file)
+            _name = f"z_ProbeOnPumpOn_{str(position).replace('.',',')} mm_Frm"
+            for file in _filelist:
+                if _name in file:
+                    if isinstance(self.ignore, list):
+                        if (
+                            file.endswith(".npy")
+                            and join(_cycle_path, file) not in self.ignored_files
+                        ):
+                            _position_files.append(file)
+                    else:
+                        if( 
+                            file.endswith(".npy")
+                        ):  
+                            _position_files.append(file)
 
             # check for empty image and fill with zeros in cas
             if not _position_files:
                 self._empties[_idx] += 1
-                _position_data = np.zeros((1, *self.pump_off.shape))
+                _position_data = np.zeros((1, *self.bckgr.shape))
 
             else:
                 # load images
                 _position_data = []
                 for file in _position_files:
-                    _img = np.load(join(_cycle_path, file)).astype(float)
+                    _img = np.load(join(_cycle_path, file)).astype(float) # * self.mask #mask here ok? probably not
+
 
                     # correct laser background
                     if self.correct_laser:
-                        if self.hotpx_removal:
-                            _, self.pump_only = hotpixel_filter(self.pump_only)
+                        # if self.hotpx_removal:    #next try this
+                        #     _, self.pump_only = hotpixel_filter(self.pump_only) 
                         _img -= self.pump_only
+
                     # remove hot pixels
                     if self.hotpx_removal:
                         _, _img = hotpixel_filter(_img)
+
+                    # normalize to pumpoff intensity
+                    if self.norm:
+                        equiv_pumpoff = np.load(join(_cycle_path, str(file).replace('PumpOn','PumpOff')))
+
+                        if self.hotpx_removal:
+                            _, equiv_pumpoff = hotpixel_filter(equiv_pumpoff)
+
+                        _img /= np.mean((equiv_pumpoff-self.bckgr) * self.mask)
+
+                    _position_data.append(_img * self.mask)
+
+
                     self.real_time_intensities.append(_img.sum())
                     self.loaded_files.append(join(_cycle_path, file))
 
@@ -334,31 +349,37 @@ class PumpedDataset:
                     if self.all_imgs_flag:
                         self.all_imgs.append(_img)
 
-                    # normalize to image intensity
-                    if self.norm:
-                        _img /= np.mean(_img * self.mask)
-
-                    _position_data.append(_img * self.mask)
+                    
 
             cycle_data.append(np.mean(_position_data, axis=0))
         return cycle_data
 
     def _get_delay_times_mapping(self):
         """
-        get the delay time steps from Cycle 1
+        get the delay time steps from logfile in Cycle 1
 
         Returns
         -------
         function
             this function maps a stage position to a relative time with respect to the lowest delay time
         """
-        self.stage_positions = []
-        for file in sorted(listdir(join(self.basedir, "Cycle 1"))):
-            if "ProbeOnPumpOn" in file and "Frm1" in file and file.endswith(".npy"):
-                self.stage_positions.append(
-                    float(findall(r"\d+\,\d*", file)[0].replace(",", "."))
-                )
-        self.stage_positions = sorted(self.stage_positions)
+        self.logfile = [] # floats of every stage position entry in the logfile.txt (logfile always has every position)
+        self.stage_positions = [] # floats of stage positions that should be in stage.txt (not all are in the stage.txt for every cycle)
+
+        logfile_path = join(self.basedir, "Cycle 1", "logfile.txt")
+
+        # First read the logfile and find all existing stagepositions 
+        if exists(logfile_path): 
+            with open(logfile_path, 'r') as logfile:
+                for line in logfile:
+                    if line.startswith("#"): 
+                        continue
+                    pos = float(line.strip().split("\t")[1])
+                    self.logfile.append(pos)
+                    self.stage_positions.append(round(pos, 2))
+
+            self.stage_positions = sorted(self.stage_positions)
+            
 
         def delaytime_from_stageposition(position):
             speed_of_light_mm_per_ps = speed_of_light * 1e3 / 1e12
@@ -376,9 +397,11 @@ class PumpedDataset:
             self.ignored_files.append(
                 join(
                     join(self.basedir, f"Cycle {int(ign[0])}"),
-                    f"z_ProbeOnPumpOn_{str(ign[1]).replace(".", ",")} mm_Frm{int(ign[2])}.npy",
+                    f"z_ProbeOnPumpOn_{str(ign[1]).replace('.', ',')} mm_Frm{int(ign[2])}.npy",
                 )
             )
+
+
 
     def _load_pump_offs(self):
         """
@@ -425,7 +448,7 @@ class PumpedDataset:
             self.pump_off = sum_pump_offs/n
         else:
             self.pump_off = np.zeros(self.bckgr.shape)
-
+            
     def _load_shorts(self):
         """
         loads the short pump off data of all cycles and makes a mean pump off image from all of them
@@ -445,7 +468,7 @@ class PumpedDataset:
             self.short = np.mean(np.array(self.shorts), axis=0)
         else:
             self.short = np.zeros(self.bckgr.shape)
-
+            
 
     def _load_pump_only(self):
         """
@@ -460,10 +483,39 @@ class PumpedDataset:
                     _pump_only_list.append(join(_cycle_path, file))
 
             for pumponly in sorted(_pump_only_list):
-                self.pump_onlys.append(np.load(pumponly))
+                pumponly_img = np.load(pumponly) * self.mask
+                if self.hotpx_removal:
+                    _, pumponly_img = hotpixel_filter(pumponly_img)
+                self.pump_onlys.append(pumponly_img)
 
-        self.pump_only = np.mean(np.array(self.pump_onlys), axis=0)
+        if self.pump_onlys:
+            self.pump_only = np.mean(np.array(self.pump_onlys), axis=0)
+        else:
+            self.pump_only = np.zeros(self.bckgr.shape)
 
+    def _load_bckgr(self):
+        """
+        loads the background data of all cycles and makes a mean background image from all of them. 
+        The unpumped data is corrected by the background and the background is used for its shape, because so far every measurement has background images
+        """
+        self.bckgrs = []
+        for cycle in self.cycles:
+            _cycle_path = join(self.basedir, f"Cycle {int(cycle)}")
+            _bckgr_list = []
+            for file in listdir(_cycle_path):
+                if "ProbeOffPumpOff" in file and file.endswith(".npy"):
+                    _bckgr_list.append(join(_cycle_path, file))
+
+            for bckgr in sorted(_bckgr_list):
+                bckgr_img = np.load(bckgr)
+                if self.hotpx_removal:
+                    _, bckgr_img = hotpixel_filter(bckgr_img)
+                self.bckgrs.append(bckgr_img)
+
+        if self.bckgrs:
+            self.bckgr = np.mean(np.array(self.bckgrs), axis=0)
+        else:
+            self.bckgr = None
         
 
 def hotpixel_filter(data, tolerance=3, size=10):

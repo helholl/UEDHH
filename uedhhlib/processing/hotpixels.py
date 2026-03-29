@@ -6,12 +6,9 @@ def hotpixel_filter(data, tolerance=3, size=10):
     Reduce the noise in the given 2D dataset.
     Returns the positions of outliers and the corrected image.
 
-    Implemented methods for outlier detection (check corresponding functions for details):
-    - "mad": Median absolute deviation
-    - "mad_local": Median absolute deviation of nearest neighbors.
-    - "std_local": Standard deviation of nearest neighbors (very slow)
+    Implemented methods for outlier detection: "mad_local": Median absolute deviation of nearest neighbors.
     """
-    # The data type of the original images is an unsigned int which is not very practical for calculating.
+    # The data type is changed from an unsigned int (original images) to float64 for further calculation
     if data.dtype != "float64":
         data = np.array(data, dtype="float64")
 

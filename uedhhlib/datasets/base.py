@@ -1,15 +1,9 @@
 from typing import Union, Tuple, List
 import numpy as np
-from PIL import Image
 from os import PathLike, listdir
 from os.path import join
-from re import findall
-from scipy.constants import speed_of_light
-from scipy.ndimage import median_filter
-from tqdm import tqdm
 from datetime import datetime
-from lmfit.model import Model, ModelResult
-import h5py
+
 
 class BaseDataset:
     def __init__(
@@ -17,7 +11,7 @@ class BaseDataset:
             basedir: PathLike,
             progress: bool = True,
             mask: np.ndarray = None,
-            correct_laserbckgr: bool = True,
+            correct_background: bool = True,
             cycles: Union[int, tuple, List[int]] = None,
             ignore: list = None          
             ):
@@ -32,7 +26,7 @@ class BaseDataset:
             turn on progress notification during data loading, by default True
         mask : np.ndarray, optional
             constant mask applied to all loaded images. Mask should be array of bool values where False values mark used points. If 'None' all points of the images are used, by default None
-        correct_laserbckgr : bool, optional
+        correct_background : bool, optional
             wether laser background is corrected for or not, by default True
         cycles : Union[int, tuple, List[int]], optional
             For now, give this parameter an iterable containing the cycle number you want to load, e.g: (1,2,4,7,10,11,12) to load cycles 1,2,4.... you get it
@@ -44,7 +38,7 @@ class BaseDataset:
         self.basedir = basedir
         self.progress = progress        
         self.mask = mask
-        self.correct_laserbckgr = correct_laserbckgr
+        self.correct_background = correct_background
 
         #always get list of cycles
         if isinstance(cycles, list):

@@ -354,7 +354,7 @@ class PumpedDataset:
                     
         """
         #prepare lists for counts of skipped/ignored delay times and averaged data
-        self.missing_cycles_per_delay = np.zeros(len(self.delay_times)) # list with entry per delaystep, what happens when entry=#cycle (meaning no img for this delaytime)?
+        self.missing_cycles_per_delay = np.zeros(len(self.delay_times)) # list with entry per delaystep, what happens when entry=#cycle (meaning no img for this delaytime)? order of entries is small to large stagepositions...not necessarily delaytimes.
         #list with cycle averaded pumped image per delaystep
         self.pumped_data = np.zeros(
             (len(self.delay_times), self.dark_bckgr.shape[0], self.dark_bckgr.shape[1])
@@ -368,7 +368,7 @@ class PumpedDataset:
 
         # load the actual data cycle for cycle
         for cycle in cycles:
-            self.pumped_data += np.array(self._load_cycle_pumped(cycle), correct_laser=correct_laser)
+            self._load_cycle_pumped(cycle, correct_laser=correct_laser)
 
         self.pumped_data /= len(self.cycles) - self.missing_cycles_per_delay[:, np.newaxis, np.newaxis]
 
@@ -438,8 +438,7 @@ class PumpedDataset:
                         "timestamp": self._read_timestamp_from_npyfpath(join(_cycle_path, f))
                     })
 
-            _cycle_data.append(np.mean(_pos_data, axis=0))
-        return( _cycle_data)
+                self.pumped_data[_idx] += np.mean(_pos_data, axis=0)
 
 
 

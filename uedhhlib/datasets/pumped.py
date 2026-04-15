@@ -111,7 +111,7 @@ class PumpedDataset:
         self._load_laser_bckgr() # load all laser background images within the to be loaded cycles and save an average laser_bckgr (later list of laser_bckgrs per delay pos)
         self._load_mask() # load mask or create mask with ones from dark_bckgr shape
         self._load_delay_times() # convert delay stage positions to pump-probe delay times (compared to smallest delay time)
-        self._load_and_save_pumpoffs(correct_dark=correct_dark, output_dir=output_dir, unpumped_fname="unpumped.h5") # load pumpoff images in each cycle
+        self._load_and_save_pumpoffs(correct_dark=correct_dark, output_dir=output_dir, unpumped_fname="hlh_unpumped.h5") # load pumpoff images in each cycle
         self._load_and_save_pumped(correct_laser=correct_laser, output_dir=output_dir)# load the pumped files, average over cycles 
 
         self.registry = pd.DataFrame(self.file_registry)
@@ -172,7 +172,10 @@ class PumpedDataset:
                 if "ProbeOffPumpOff" in f and f.endswith(".npy"):
                     _dbckgr_flist.append(join(_cycle_path, f))
 
-            for f in sorted(_dbckgr_flist):
+            for f in sorted(_dbckgr_flist, key=lambda p: (
+                int(Path(p).parts[-2].replace("Cycle ","")),
+                float(Path(p).stem.split("_")[2].replace(",",".").replace(" mm","")))
+                ):
                 dbckgr_img = np.load(f)
                 self.dark_bckgrs.append(dbckgr_img)
 
@@ -198,7 +201,10 @@ class PumpedDataset:
                 if "ProbeOffPumpOn" in f and f.endswith(".npy"):
                     _lbckgr_flist.append(join(_cycle_path, f))
 
-            for f in sorted(_lbckgr_flist):
+            for f in sorted(_lbckgr_flist, key=lambda p: (
+                int(Path(p).parts[-2].replace("Cycle ","")),
+                float(Path(p).stem.split("_")[2].replace(",",".").replace(" mm","")))       
+                ):
                 lbckgr_img = np.load(f)
                 self.laser_bckgrs.append(lbckgr_img)
 
@@ -292,7 +298,10 @@ class PumpedDataset:
                     _pumpoff_pathlist.append(join(_cycle_path, f))
 
             # load every directory and save metadata
-            for fpath in sorted(_pumpoff_pathlist_cyc):
+            for fpath in sorted(_pumpoff_pathlist_cyc, key=lambda p: (
+                int(Path(p).parts[-2].replace("Cycle ","")),
+                float(Path(p).stem.split("_")[2].replace(",",".").replace(" mm","")))
+                ):
                 f = Path(fpath).stem
                 stage_pos = float(f.split("_")[2].replace(",",".").replace(" mm",""))
                 _img = np.load(fpath)
@@ -309,6 +318,11 @@ class PumpedDataset:
                     "timestamp": self._read_timestamp_from_npyfpath(fpath)
                     })
                 
+        unpumped_reg_entries = sorted(
+            [e for e in self.file_registry if e["img_type"] == "unpumped"],
+             key=lambda e: e["timestamp"]
+        )
+                
         with h5py.File(join(output_dir, unpumped_fname), "w") as f:
             realtime_group = f.create_group("labtime")
             shape = (len(_pumpoff_pathlist),) + self.dark_bckgr.shape
@@ -320,18 +334,14 @@ class PumpedDataset:
             if len(_pumpoff_pathlist)>0:
                 summed_pumpoffs = None
                 n = 0
-                for i, pumpoff_path in enumerate(sorted(_pumpoff_pathlist)): 
-                    _img = np.load(pumpoff_path).astype(np.float64)
+                for i, entry in enumerate(unpumped_reg_entries):
+                    _img = np.load(entry["filepath"]).astype(np.float64)
                     if correct_dark:
                         _img -= self.dark_bckgr
                     _img = _img * self.mask
                     dset[i] = _img
-
-                    for entry in self.file_registry:
-                        if entry["filepath"] == pumpoff_path:
-                            entry["total_intensity"] = _img.sum()
-                            entry["h5_index"] = i
-                            break
+                    entry["total_intensity"] = _img.sum()
+                    entry["h5_index"] = i
 
                     if summed_pumpoffs is None:
                         summed_pumpoffs = _img
@@ -373,13 +383,15 @@ class PumpedDataset:
         self.pumped_data /= len(self.cycles) - self.missing_cycles_per_delay[:, np.newaxis, np.newaxis]
 
         # here we sort the data so that small delay times are at low index values just for convenience
-        self.delay_times = self.delay_times[::-1]
-        self.stage_positions = self.stage_positions[::-1]
-        self.pumped_data = self.pumped_data[::-1]
+        if self.delay_times[0] > self.delay_times[-1]:
+            self.delay_times = self.delay_times[::-1]
+            self.stage_positions = self.stage_positions[::-1]
+            self.pumped_data = self.pumped_data[::-1]
 
     def _load_cycle_pumped(self, cycle: int, correct_laser: bool = True):
         """
-        load pumped images
+        load pumped images (sorted by self.stage_positions, in _load_and_save_pumped it is sorted by self.delay_times)
+        add cycle data per stage_position to self.pumped_data
         
         Parameters
         ----------
@@ -387,16 +399,10 @@ class PumpedDataset:
             number of cycle from which the pumped data is collected
         correct_laser: bool, optional
             if True the pumped images are subtracted by the averages self.laser_bckgr (SOON optional correct for different laser_bckgrs for each stage_position)
-        
-        Returns
-        -------
-        list
-            list of 2d-arrays containing the diffraction data of each stage position averaged over the frames in this cycle
         """
 
         _cycle_path = join(self.basedir, f"Cycle {int(cycle)}")
         _flist = listdir(_cycle_path)
-        _cycle_data = [] #?
 
         for _idx, pos in enumerate(self.stage_positions):
             _pos_flist = [] # collect filenames at this delaystage position in this cycle (=collect all frames)
@@ -446,7 +452,7 @@ class PumpedDataset:
 
     def _read_timestamp_from_npyfpath(self, fpath_npy: str) -> datetime:
         """
-        Reads epoch timestamp from accompanying .txt file to the .npy file
+        Reads Unix-Timestamp (number of seconds since 01.01.1970) from accompanying .txt file to the .npy file
 
         Parameters
         ----------
@@ -455,17 +461,13 @@ class PumpedDataset:
 
         Returns
         -------
-        datetime
-            labtime of the taken image
+        float
+            labtime of the taken image in Unix-Timestamp format
         """
 
         fpath_txt = fpath_npy.replace(".npy",".txt")
         with open(fpath_txt, "r") as f:
-            return( 
-                datetime.fromtimestamp(
-                    int(findall(r"(?<=\\A2\\)\d+", f.readlines()[1])[0])
-                )
-            )
+            return( int(findall(r"(?<=\\A2\\)\d+", f.readlines()[1])[0]) )
 
 
         

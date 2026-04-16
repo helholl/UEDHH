@@ -32,16 +32,6 @@ def save_datasets_h5(ds, filename: PathLike):
         f.create_dataset("time_points", data=ds.delay_times)
         f.create_dataset("valid_mask", data=~ds.mask)
         proc_group = f.create_group("processed")
-        proc_group.create_dataset("equilibrium", data=ds.pumpoff)
+        proc_group.create_dataset("equilibrium", data=ds.pumpoff_long)
         proc_group.create_dataset("intensity", data=np.moveaxis(ds.pumped_data, 0, -1))
 
-        # labtime_group = f.create_group("lab_time")
-        # labtime_group.create_dataset("intensity", data=ds.lab_time_intensities) #total image intensity for arc detection: ONLY PUMPED??
-        # labtime_group.create_dataset("loaded_files", data=ds.loaded_files) #list of loaded files (abbreviated by delaystep, cycle and frame): PUMPED ONLY?
-        # labtime_group.create_dataset("timestamps", data=np.array(ds.timestamps, dtype="S")) #list of timestamps of taken images PUMPED ONLY
-        # labtime_group.create_dataset("intensity_unpumped", data=ds.lab_time_intensities_unpumped) #total intensity of unpumped images for mainbeam and crystal quality check? must be changed in future so that peak position is chosen for quality and short images are included for main beam
-        # labtime_group.create_dataset("loaded_files_unpumped", data=ds.loaded_files_unpumped) #list of loaded files UNPUMPED ONLY (abbreviated by delaystep, cycle and frame)
-        # labtime_group.create_dataset("timestamps_unpumped", data=np.array(ds.timestamps_unpumped, dtype="S")) #list of timestamps of taken images UNPUMPED ONLY
-        # labtime_group.create_dataset("loaded_files_pumponly", data=ds.loaded_files_pumponly) #list of loaded files LASER ONLY (abbreviated by delaystep, cycle and frame)
-        # labtime_group.create_dataset("laser_onlys", data= ds.pump_onlys) #AVERAGE? image of ALL? laser only images?
-        # labtime_group.create_dataset("timestamps_pumponly", data=np.array(ds.timestamps_pumponly, dtype="S")) #list of timestamps of taken images LASER ONLY

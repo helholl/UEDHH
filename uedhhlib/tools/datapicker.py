@@ -7,6 +7,8 @@ from pyqtgraph.Qt import QtWidgets, QtGui
 import numpy as np
 from re import findall
 from datetime import datetime
+import json
+from pathlib import Path
 
 from argparse import ArgumentParser
 
@@ -21,11 +23,17 @@ def parse_args():
 
 
 class DataPicker(QtWidgets.QMainWindow):
-    def __init__(self, timestamps, intensities, loaded_files, *args, **kwargs):
+    def __init__(self, df, default_dir: str ="", *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.timestamps = timestamps
-        self.loaded_files = loaded_files
+        df = df.sort_values("timestamp").reset_index(drop=True)
+
+        self.timestamps = df["timestamp"].values
+        #self.intensities = df["total_intensity"].values
+        self.loaded_files = df["filepath"].values
+        self.df = df
+        self.default_dir = default_dir
+
         self.lris = []
         self.shortcut_add_lri = QtGui.QShortcut(QtGui.QKeySequence("+"), self)
         self.shortcut_add_lri.activated.connect(self.add_lri)
@@ -33,15 +41,53 @@ class DataPicker(QtWidgets.QMainWindow):
         self.shortcut_remove_lri.activated.connect(self.remove_lri)
         self.shortcut_print_rule = QtGui.QShortcut(QtGui.QKeySequence("space"), self)
         self.shortcut_print_rule.activated.connect(self.print_rule)
+        self.shortcut_save_ignored = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+S"), self)
+        self.shortcut_save_ignored.activated.connect(self.save_ignored)
 
 
         self.graphics_layout = pg.GraphicsLayoutWidget()
         self.plot = self.graphics_layout.addPlot(
             axisItems={"bottom": pg.DateAxisItem()}
             )
-        self.curve = self.plot.plot(intensities)
-        self.plot.enableAutoRange(axis=pg.ViewBox.YAxis)
+        
+        #plot pumped, unpumped_long and unpumped_short separately
+        pumped = df[df["img_type"]=="pumped"]
+        unpumped_long = df[df["img_type"]=="unpumped_long"]
+        unpumped_short = df[df["img_type"]=="unpumped_short"]
 
+        legend = self.plot.addLegend(offset=(-10, 10))
+        legend.setBrush(pg.mkBrush(50, 50, 50, 200)) #dark background, slightly transparent
+        legend.setPen(pg.mkPen(color="w", width=1)) #white bow
+        self.plot.plot(
+            x=pumped["timestamp"].values,
+            y=pumped["total_intensity"].values,
+            pen=pg.mkPen(color="#ffa500", width=1), #None: no line, style=Qt.DashLine
+            symbol="d",
+            symbolsize=3,
+            symbolBrush="#ffa500", #color (orange)
+            name="pumped"
+        )
+        self.plot.plot(
+            x=unpumped_long["timestamp"].values,
+            y=unpumped_long["total_intensity"].values,
+            pen=pg.mkPen(color="b", width=1), #no line
+            symbol="d",
+            symbolsize=3,
+            symbolBrush="b", #color (blue)
+            name="unpumped (long)"
+        )
+        self.plot.plot(
+            x=unpumped_short["timestamp"].values,
+            y=unpumped_short["total_intensity"].values,
+            pen=pg.mkPen(color="g", width=1), #no line
+            symbol="d",
+            symbolsize=3,
+            symbolBrush="g", #color (green)
+            name="unpumped (short)"
+        )
+
+        #self.curve = self.plot.plot(x=timestamps, y=intensities)
+        self.plot.enableAutoRange(axis=pg.ViewBox.YAxis)
         self.setCentralWidget(self.graphics_layout)
         self.show()
 
@@ -50,9 +96,11 @@ class DataPicker(QtWidgets.QMainWindow):
 
     @pyqtSlot()
     def add_lri(self):
-        width = int(len(self) / 10)
+        total_duration = self.timestamps[-1] - self.timestamps[0]
+        width = int(total_duration / 10) #10% of the measurement duration
         if not self.lris:
-            mi, ma = 0, width
+            mi = self.timestamps[0]
+            ma = mi + width
         else:
             mi = self.lri_regions[-1][-1] + int(width / 2)
             ma = mi + width
@@ -68,34 +116,59 @@ class DataPicker(QtWidgets.QMainWindow):
     def print_rule(self):
         output = "ignored_files = ["
         for region in self.lri_regions:
-            if region[0] < 0:
-                region[0] = 0
-            if region[0] > len(self.timestamps):
-                region[0] = len(self.timestamps - 1)
-            if region[1] < 0:
-                region[1] = 0
-            if region[1] > len(self.timestamps):
-                region[1] = len(self.timestamps - 1)
+            selected = self.df[
+                (self.df["timestamp"] >= region[0]) &
+                (self.df["timestamp"] <= region[1])
+            ]
 
-            def _ignored_image_from_filename(filename):
-
-                extracted_identifiers = findall(
-                    r"Cycle\s*(\d+).*?_(\d+,\d+).*?_Frm(\d+)", str(filename)
-                )[0]
-
-                return (
-                    int(extracted_identifiers[0]),
-                    extracted_identifiers[1].replace(",", "."),
-                    int(extracted_identifiers[2]),
-                )
-
-            for file_name in self.loaded_files[region[0] : region[1] + 1]:
-                _cycle, stage_pos, frame_no = _ignored_image_from_filename(file_name)
-                output += f"({_cycle}, {stage_pos}, {frame_no}), "
+            for _, row in selected.iterrows():
+                output += f"({int(row["cycle"])}, {row["img_type"]}, {float(row["stage_position"])}, {int(row["frame"])}), "
 
         # remove last space and comma separator and close list
         output = output.rstrip(", ") + "]"
         print(output)
+
+    @pyqtSlot()
+    def save_ignored(self):
+        selected_rows = []
+        for region in self.lri_regions:
+            selected = self.df[
+                (self.df["timestamp"] >= region[0]) &
+                (self.df["timestamp"] <= region[1])
+            ]
+            selected_rows.append(selected)
+
+        if not selected_rows:
+            return #nothing selected, nothing gets saved
+        
+        all_selected = pd.concat(selected_rows)
+
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save ignored labels", #tab name
+            str(Path(self.default_dir)/"ignored_labels.json"), #proposed filename
+            "JSON Files (*.json)" #datafilter
+        )
+
+        if not filename:
+            return #user canceled
+        
+        #ignored labels as list of tuples
+        ignored = []
+        for _, row in all_selected.iterrows():
+            ignored.append({
+                "cycle": int(row["cycle"]),
+                "img_type": row["img_type"],
+                "stage_position": float(row["stage_position"]),
+                "frame": int(row["frame"]),
+                "filepath": row["filepath"]
+            })
+        
+        with open(filename, "w") as f:
+            json.dump(ignored, f, indent=4)
+
+        print(f"saved {len(ignored)} ignored files to {filename}")
+
 
     @property
     def lri_regions(self):
@@ -108,14 +181,11 @@ class DataPicker(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     import sys
     import h5py
-
+    import pandas as pd
+    
     args = parse_args()
-    with h5py.File(args.filepath, "r") as hf:
-        timestamps = hf["real_time/timestamps"][()]
-        intensities = hf["real_time/intensity"][()]
-        loaded_files = hf["real_time/loaded_files"][()]
-
+    df = pd.read_hdf(args.filepath, key="file_registry")
 
     app = QtWidgets.QApplication(sys.argv)
-    win = DataPicker(timestamps, intensities, loaded_files)
+    win = DataPicker(df, default_dir=str(Path(args.filepath).parent))
     sys.exit(app.exec())

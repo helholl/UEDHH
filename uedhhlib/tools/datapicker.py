@@ -54,6 +54,8 @@ class DataPicker(QtWidgets.QMainWindow):
         pumped = df[df["img_type"]=="pumped"]
         unpumped_long = df[df["img_type"]=="unpumped_long"]
         unpumped_short = df[df["img_type"]=="unpumped_short"]
+        dark_bckgr = df[df["img_type"]=="dark_bckgr"]
+        laser_bckgr = df[df["img_type"]=="laser_bckgr"]
 
         legend = self.plot.addLegend(offset=(-10, 10))
         legend.setBrush(pg.mkBrush(50, 50, 50, 200)) #dark background, slightly transparent
@@ -84,6 +86,24 @@ class DataPicker(QtWidgets.QMainWindow):
             symbolsize=3,
             symbolBrush="g", #color (green)
             name="unpumped (short)"
+        )
+        self.plot.plot(
+            x=dark_bckgr["timestamp"].values,
+            y=dark_bckgr["total_intensity"].values,
+            pen=pg.mkPen(color="#38038f", width=1), #no line
+            symbol="d",
+            symbolsize=3,
+            symbolBrush="#38038f", #color (green)
+            name="dark background"
+        )
+        self.plot.plot(
+            x=laser_bckgr["timestamp"].values,
+            y=laser_bckgr["total_intensity"].values,
+            pen=pg.mkPen(color="#f5ff9c", width=1), #no line
+            symbol="d",
+            symbolsize=3,
+            symbolBrush="#f5ff9c", #color (green)
+            name="laser background"
         )
 
         #self.curve = self.plot.plot(x=timestamps, y=intensities)
@@ -180,7 +200,6 @@ class DataPicker(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     import sys
-    import h5py
     import pandas as pd
     
     args = parse_args()

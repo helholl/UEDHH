@@ -19,6 +19,8 @@ from .datapicker import DataPicker
 #     # etc.
 # )
 
+from .copy_files import copy_all_txt_files
+
 __all__ = [
     # Preprocessing
     'remove_hpx_from_dataset',

@@ -36,8 +36,11 @@ def save_datasets_h5(ds, filename: PathLike):
         proc_group = f.create_group("processed")
         proc_group.create_dataset("equilibrium", data=ds.pumpoff_long)
         proc_group.create_dataset("intensity", data=np.moveaxis(ds.pumped_data, 0, -1))
+        proc_group.create_dataset("difference", data=np.moveaxis(ds.difference_data, 0, -1))
         if hasattr(ds, 'valid_delays_mask'):
             proc_group.create_dataset("valid_delays", data=ds.valid_delays_mask)
+        if hasattr(ds, 'valid_delays_mask_diff'):
+            proc_group.create_dataset("valid_dela_diff", data=ds.valid_delays_mask_diff)
             
 def save_file_registry(filename, registry, basedir):
     """

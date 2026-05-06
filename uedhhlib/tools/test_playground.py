@@ -1,3 +1,13 @@
 import numpy as np
 
-print(round(15.7155, 2))
+a = 5
+
+if a==3:
+    print("first")
+
+else:
+    print("third")
+
+if a!=4:
+    print("second")
+

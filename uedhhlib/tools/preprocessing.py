@@ -6,6 +6,7 @@ Run hot pixel removal over every image before reading in the data and analysis
 from multiprocessing import Pool, cpu_count
 from functools import partial
 import numpy as np
+import tifffile as tiff
 from typing import Union, List, Tuple
 from pathlib import Path
 from os import listdir
@@ -13,7 +14,7 @@ from tqdm import tqdm
 
 from ..processing.hotpixels import hotpixel_filter
 
-def _processing_single_file(
+def _processing_single_npy_file(
         args: Tuple[Path, Path, float, int]
         ) -> dict:
     """
@@ -41,6 +42,48 @@ def _processing_single_file(
         )
         
         np.save(output_path, cleaned_img)
+
+        return {
+            'success': True,
+            'file': input_path.name,
+            'hot_pixels': len(outliers[0])
+        }
+    
+    except Exception as e:
+        return {
+            'success': False,
+            'file': input_path.name,
+            'error': str(e)
+        }
+    
+def _processing_single_tif_file(
+        args: Tuple[Path, Path, float, int]
+        ) -> dict:
+    """
+    Process a single file (used by multiprocessing).
+    
+    Parameters
+    ----------
+    args : tuple
+        (input_path, output_path, tolerance, size)
+    
+    Returns
+    -------
+    dict
+        Result statistics
+    """
+    input_path, output_path, tolerance, size = args
+
+    try:
+        img = tiff.imread(input_path)
+
+        outliers, cleaned_img = hotpixel_filter(
+            img,
+            tolerance=tolerance,
+            size=size
+        )
+        
+        tiff.imwrite(output_path, cleaned_img)
 
         return {
             'success': True,
@@ -170,7 +213,7 @@ def remove_hpx_from_dataset(
         if progress:
             results = list(tqdm(
                 pool.imap(
-                    _processing_single_file, 
+                    _processing_single_npy_file, 
                     [(t[0], t[1], t[2], t[3]) for t in all_tasks]
                     ),
                 total=len(all_tasks),
@@ -178,7 +221,7 @@ def remove_hpx_from_dataset(
             ))
         else:
             results = pool.map(
-                _processing_single_file,
+                _processing_single_npy_file,
                 [(t[0], t[1], t[2], t[3]) for t in all_tasks]
             )
 

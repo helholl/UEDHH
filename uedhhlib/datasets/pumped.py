@@ -75,7 +75,10 @@ class PumpedDataset:
         self.missing_cycles_per_delay = None # list with one entry per delaystep, counting skipped/ignored pumped files per delaystep
         self.valid_delays_mask = None #to store bool array of valid images of each delayposition in pumped data 
         self.pumped_data = None # list of 2d arrays (pumped imgs), one per delaystep, averaged over cycles
-    
+        self.missing_cycles_per_delay_diff = None # list for difference_data with one entry per delaystep, counting skipped/ignored pumped files per delaystep
+        self.valid_delays_mask_diff = None #to store bool array of valid images of each delayposition in difference_data
+        self.difference_data = None # list of 2d difference images per delaystep: every pumped image is subtracted by corresponding pumpoff_long (right before or after) and only after that averaged per delaystep
+
     # 3. private help methods (used by __init__)
 
     # 4. public main methods
@@ -84,6 +87,7 @@ class PumpedDataset:
             correct_dark: bool = True,
             correct_laser: bool = True,
             output_dir: PathLike = None,
+            save_diff: bool = True,
             unpumped_fname: str = "hlh_unpumped.h5"
             ):
         """
@@ -97,6 +101,8 @@ class PumpedDataset:
             if True the pumped images are corrected by a laser background image (at the moment average, later different laserOnly image per delay position)
         output_dir : PathLike, optional
             if output directory is given, the unpumped images are saved there in a h5 file sorted by labtime
+        save_diff : bool, optional
+            if True, additional to the pumped images there will be averaged difference images with each pumped image being subtracted by the corresponding unpumped_long in labtime.    
         unpumped_fname: str
             file name of unpumped h5 file
         """
@@ -108,7 +114,7 @@ class PumpedDataset:
         self._load_laser_bckgr() # load all laser background images within the to be loaded cycles and save an average laser_bckgr (later list of laser_bckgrs per delay pos)
         self._load_mask() # load mask or create mask with ones from dark_bckgr shape
         self._load_and_save_unpumped(correct_dark=correct_dark, output_dir=output_dir, unpumped_fname=unpumped_fname) # load pumpoff images in each cycle
-        self._load_and_save_pumped(correct_laser=correct_laser)# load the pumped files, average over cycles 
+        self._load_and_save_pumped(correct_laser=correct_laser, save_diff=save_diff, correct_dark=correct_dark)# load the pumped files, average over cycles 
 
         self.registry = pd.DataFrame(self.file_registry)
         self.registry = self.registry.sort_values("timestamp").reset_index(drop=True)
@@ -518,7 +524,7 @@ class PumpedDataset:
         return( mean_img )
 
 
-    def _load_and_save_pumped(self, correct_laser: bool = True):
+    def _load_and_save_pumped(self, correct_laser: bool = True, save_diff: bool = True, correct_dark: bool = True):
         """
         Go through the cycles and collect and average the pumped images per delay step over the cycles
         
@@ -526,7 +532,10 @@ class PumpedDataset:
         ----------
         correct_laser: bool, optional
             if True the pumped images are subtracted by the averages self.laser_bckgr (SOON optional correct for different laser_bckgrs for each stage_position)
-                    
+        save_diff : bool, optional
+            if True, additional to the pumped images there will be averaged difference images with each pumped image being subtracted by the corresponding unpumped_long in labtime.                
+        correct_dark: bool, optinal
+            if True the unpumped images for the difference images are corrected by self.dark_bckgr
         """
         #prepare lists for counts of skipped/ignored delay times and averaged data
         self.missing_cycles_per_delay = np.zeros(len(self.delay_times)) # list with entry per delaystep, what happens when entry=#cycle (meaning no img for this delaytime)? order of entries is small to large stagepositions...not necessarily delaytimes.
@@ -534,35 +543,54 @@ class PumpedDataset:
         self.pumped_data = np.zeros(
             (len(self.delay_times), self.dark_bckgr.shape[0], self.dark_bckgr.shape[1])
         )
+        #now for difference images
+        self.missing_cycles_per_delay_diff = np.zeros(len(self.delay_times)) # list with entry per delaystep, later +1 if pumpoff OR pumped not there/ignored
+        self.difference_data = np.zeros(
+            (len(self.delay_times), self.dark_bckgr.shape[0], self.dark_bckgr.shape[1])
+        )
 
         if self.progress:
-            cycles = tqdm(self.cycles)
-            print("loading pumped images")
+            cycles = tqdm(self.cycles, desc="loading pumped images")
         else:
             cycles = self.cycles
 
         # load the actual data cycle for cycle
         for cycle in cycles:
-            self._load_cycle_pumped(cycle, correct_laser=correct_laser)
+            self._load_cycle_pumped(cycle, correct_laser=correct_laser, save_diff=save_diff, correct_dark=correct_dark)
 
         valid_counts = len(self.cycles) - self.missing_cycles_per_delay
         self.valid_delays_mask = valid_counts > 0 #bool array
 
+        valid_counts_diff = len(self.cycles) - self.missing_cycles_per_delay_diff
+        self.valid_delays_mask_diff = valid_counts_diff > 0 #bool array
+
+        #normalize to considered amount of images
         for i in range(len(self.delay_times)):
             if self.valid_delays_mask[i]:
                 self.pumped_data[i] /= valid_counts[i]
             else:
                 self.pumped_data[i] = np.nan
                 if self.progress:
-                    print(f"No valid data for delay {self.delay_times[i]:.2f} ps (position {self.stage_positions[i]})")
+                    print(f"No valid data for pumped data at delay {self.delay_times[i]:.2f} ps (position {self.stage_positions[i]})")
 
-        # here we sort the data so that small delay times are at low index values just for convenience
-        if self.delay_times[0] > self.delay_times[-1]:
+        if save_diff:
+            #normalize to considered amount of images
+            for i in range(len(self.delay_times)):
+                if self.valid_delays_mask_diff[i]:
+                    self.difference_data[i] /= valid_counts_diff[i]
+                else:
+                    self.difference_data[i] = np.nan
+                    if self.progress:
+                        print(f"No valid data for difference image at delay {self.delay_times[i]:.2f} ps (position {self.stage_positions[i]})")
+
+        # here we sort the data so that small delay times are at low index values just for convenience,
+        if self.delay_times[0] > self.delay_times[-1]: #depending on if small position on the stage corresponds to small or large delaytime
             self.delay_times = self.delay_times[::-1]
             self.stage_positions = self.stage_positions[::-1]
             self.pumped_data = self.pumped_data[::-1]
+            self.difference_data = self.difference_data[::-1]
 
-    def _load_cycle_pumped(self, cycle: int, correct_laser: bool = True):
+    def _load_cycle_pumped(self, cycle: int, correct_laser: bool = True, save_diff: bool = True, correct_dark: bool = True):
         """
         load pumped images (sorted by self.stage_positions, in _load_and_save_pumped it is sorted by self.delay_times)
         add cycle data per stage_position to self.pumped_data
@@ -573,6 +601,10 @@ class PumpedDataset:
             number of cycle from which the pumped data is collected
         correct_laser: bool, optional
             if True the pumped images are subtracted by the averages self.laser_bckgr (SOON optional correct for different laser_bckgrs for each stage_position)
+        save_diff : bool, optional
+            if True, additional to the pumped images there will be averaged difference images with each pumped image being subtracted by the corresponding unpumped_long in labtime.
+        correct_dark: bool, optinal
+            if True the unpumped images for the difference images are corrected by self.dark_bckgr
         """
 
         _cycle_path = self.basedir/ f"Cycle {int(cycle)}"
@@ -580,6 +612,7 @@ class PumpedDataset:
 
         for _idx, pos in enumerate(self.stage_positions):
             _pos_flist = [] # collect filenames at this delaystage position in this cycle (=collect all frames)
+            _pos_unpumped_flist = []
             _name = f"z_ProbeOnPumpOn_{str(pos).replace('.',',')} mm_Frm"
             for f in _flist:
                 if _name in f:
@@ -589,15 +622,31 @@ class PumpedDataset:
                     else: #if no files to be ignored were given
                         if f.endswith(".npy"):
                             _pos_flist.append(f)
+                #collect unpumped frames for pos to be able to save difference images            
+                if save_diff:
+                    if _name.replace("ProbeOnPumpOn","ProbeOnPumpOff") in f:
+                        if isinstance(self.ignored_files, list):
+                            if f.endswith(".npy") and join(f"Cycle {cycle}", f) not in self.ignored_files:
+                                _pos_unpumped_flist.append(f) #add file if not in ignored_files
+                        else: #if no files to be ignored were given
+                            if f.endswith(".npy"):
+                                _pos_unpumped_flist.append(f)
+
 
             # if no file is collected, fill with zeros
+            diff_flag = False # if a diff image can/should be saved for this position in this cycle
+            if save_diff:
+                diff_flag = True
+                if not _pos_flist or not _pos_unpumped_flist:
+                    diff_flag = False
+                    self.missing_cycles_per_delay_diff[_idx] += 1
+
             if not _pos_flist:
                 self.missing_cycles_per_delay[_idx] +=1
-                _pos_data = np.zeros((1, *self.dark_bckgr.shape))
 
             else:
                 #load images
-                _pos_data = []
+                _pos_data = [] # list of 2d arrays (frames of pumped imgs)
                 for f in _pos_flist:
                     fpath = join(_cycle_path, f)
                     _img = np.load(fpath).astype(np.float64)
@@ -609,6 +658,22 @@ class PumpedDataset:
                     self._add_to_registry(fpath, intensity=_img.sum())
 
                 self.pumped_data[_idx] += np.mean(_pos_data, axis=0)
+
+                if diff_flag:
+                    _pos_unpumped_data = [] # list of 2d arrays (frames of unpumped imgs)
+                    for f in _pos_unpumped_flist:
+                        fpath = join(_cycle_path, f)
+                        _img = np.load(fpath).astype(np.float64)
+                        if correct_dark:
+                            _img -= self.dark_bckgr
+                        _img *= self.mask
+
+                        _pos_unpumped_data.append(_img)
+                    
+                    #save difference image which is normalized to unpumped image
+                    self.difference_data[_idx] += (np.mean(_pos_data, axis=0) - np.mean(_pos_unpumped_data, axis=0)) / np.mean(_pos_unpumped_data, axis=0)
+
+                        
 
 
     def _add_to_registry(self, fpath, intensity: float = None): #position somewhere else? later?

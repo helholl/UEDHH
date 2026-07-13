@@ -40,7 +40,7 @@ def save_datasets_h5(ds, filename: PathLike):
         if hasattr(ds, 'valid_delays_mask'):
             proc_group.create_dataset("valid_delays", data=ds.valid_delays_mask)
         if hasattr(ds, 'valid_delays_mask_diff'):
-            proc_group.create_dataset("valid_dela_diff", data=ds.valid_delays_mask_diff)
+            proc_group.create_dataset("valid_delays_diff", data=ds.valid_delays_mask_diff)
             
 def save_file_registry(filename, registry, basedir):
     """

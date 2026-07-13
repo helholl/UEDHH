@@ -50,7 +50,7 @@ class PumpedDataset:
             Note: If both ignored_labels and ignored_jsonpath are given, both are added
         """
 
-        self.basedir = basedir
+        self.basedir = Path(basedir)
         self.progress = progress
         self.mask_dir = mask_dir
         self.cycles = cycles
@@ -238,7 +238,7 @@ class PumpedDataset:
                 int(Path(p).parts[-2].replace("Cycle ","")),
                 float(Path(p).stem.split("_")[2].replace(",",".").replace(" mm","")))
                 ):
-                dbckgr_img = np.load(fpath)
+                dbckgr_img = np.load(fpath).T
                 self._add_to_registry(fpath, intensity=dbckgr_img.sum())
                 self.dark_bckgrs.append(dbckgr_img)
 
@@ -269,7 +269,7 @@ class PumpedDataset:
                 int(Path(p).parts[-2].replace("Cycle ","")),
                 float(Path(p).stem.split("_")[2].replace(",",".").replace(" mm","")))       
                 ):
-                lbckgr_img = np.load(fpath)
+                lbckgr_img = np.load(fpath).T
                 self._add_to_registry(fpath, intensity=lbckgr_img.sum())
 
                 self.laser_bckgrs.append(lbckgr_img)
@@ -284,7 +284,7 @@ class PumpedDataset:
         loads mask and converts to boolean values per pixel with the correct shape
         """
         if isinstance(self.mask_dir, PathLike):
-            self.mask = np.load(self.mask_dir)
+            self.mask = np.load(self.mask_dir).T
             if self.mask.shape == self.dark_bckgr.shape:
                 self.mask = self.mask.astype(bool)
             else:
@@ -414,7 +414,7 @@ class PumpedDataset:
 
         #load each image
         for fpath in iterator:
-            _img = np.load(fpath).astype(np.float64)
+            _img = np.load(fpath).astype(np.float64).T
             if correct_dark:
                 _img -= self.dark_bckgr
             _img = _img * self.mask
@@ -496,7 +496,7 @@ class PumpedDataset:
 
         #load each image
         for i, fpath in iterator:
-            _img = np.load(fpath).astype(np.float64)
+            _img = np.load(fpath).astype(np.float64).T
             if correct_dark:
                 _img -= self.dark_bckgr
             _img = _img * self.mask
@@ -649,7 +649,7 @@ class PumpedDataset:
                 _pos_data = [] # list of 2d arrays (frames of pumped imgs)
                 for f in _pos_flist:
                     fpath = join(_cycle_path, f)
-                    _img = np.load(fpath).astype(np.float64)
+                    _img = np.load(fpath).astype(np.float64).T
                     if correct_laser:
                         _img -= self.laser_bckgr
                     _img *= self.mask
@@ -663,7 +663,7 @@ class PumpedDataset:
                     _pos_unpumped_data = [] # list of 2d arrays (frames of unpumped imgs)
                     for f in _pos_unpumped_flist:
                         fpath = join(_cycle_path, f)
-                        _img = np.load(fpath).astype(np.float64)
+                        _img = np.load(fpath).astype(np.float64).T
                         if correct_dark:
                             _img -= self.dark_bckgr
                         _img *= self.mask

@@ -14,4 +14,4 @@ def copy_all_txt_files(source_file_dir: str, target_file_dir:str):
         target_cyc_folder = Path(target_file_dir)/cyc_folder.name
         target_cyc_folder.mkdir(exist_ok=True)
         for file in cyc_folder.glob("*.txt"):
-            shutil.move(str(file), str(target_cyc_folder/file.name))
+            shutil.copy2(str(file), str(target_cyc_folder/file.name))

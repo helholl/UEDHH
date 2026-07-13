@@ -15,7 +15,11 @@ def electron_wavelength_from_energy(voltage: int):
     wavelength: float
 
     """
-    v=np.sqrt(2*voltage*e/m_e)
-    wavelength = h/(m_e*v) * np.sqrt(1- (v/c)**2) #in m
+
+    E_kin = voltage * e
+    gamma = 1+ (E_kin/(m_e*c**2))
+    wavelength = h/(m_e * c * gamma * np.sqrt(1-(1/gamma**2))) 
 
     return(wavelength)
+
+

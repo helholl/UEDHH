@@ -21,13 +21,13 @@ from pathlib import Path
 from datetime import datetime
 from skued import biexponential, with_irf
 from scipy.optimize import curve_fit
-from uedhhlib.analysis.find_colors import color_enumerate
+from uedhhlib.analysis.q2_weights import compute_q2_weight
 
 analysis_folder_path = Path(r"Z:\Users\Emma\Zyla1\2026\2026_06\NT49\260619\NT49_Pos5_Perylene\Meas1_wohtpx\hlh_analysis")
 poni_name = "UEDPerylExp16_meanlongpumpoff.poni"
 mask_name = "peryl_exp16_mask_transp.npy"
 pumpedH5_name = "exp16_woarcs1stAnd2ndIteration_transposed.h5" #_transposed
-pdf_name = "Peryl_exp16_azigral_transp.pdf"
+pdf_name = "Peryl_exp16_azigral_transp_q2weighted.pdf"
 
 # set some variables
 t0_set = 35 #in ps, guess set by hand due to knowledge of measurement, for time axis setting
@@ -82,6 +82,7 @@ poni = pyFAI.load(analysis_folder_path/ poni_name)
 fit2d_geom = poni.getFit2D() 
 fit2d_geom["directDist"] = 187  ## in mm 
 poni.setFit2D(**fit2d_geom)
+q2_weight = compute_q2_weight(long_pumpoff, analysis_folder_path/ poni_name) #np.array with factor per pixel
 
 centerX, centerY = fit2d_geom["centerX"], fit2d_geom["centerY"]
 mask = np.load(analysis_folder_path/ mask_name)
@@ -157,8 +158,8 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
     fig.suptitle(f"HDF5 file: {pumpedH5_name}, azigral analysis: {now_formatted}, measuring time: {start_formatted} to {end_formatted}"), 
     axs = axs.flatten() # make list of array
 
-    axs[0].set_title("Mean long_pumpoff")
-    im0 = axs[0].imshow(long_pumpoff, cmap=cmap, vmin=0, vmax=np.percentile(long_pumpoff, 99))
+    axs[0].set_title("Mean long_pumpoff (weighted by q2)")
+    im0 = axs[0].imshow(long_pumpoff*q2_weight, cmap=cmap, vmin=0, vmax=np.percentile(long_pumpoff*q2_weight, 99))
     axs[0].imshow(mask, cmap=binary_cmap)
     axs[0].scatter(centerX-0.5, centerY-0.5, marker="x", s=20, color="g", label="Beam Center")
     axs[0].legend()
@@ -177,7 +178,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
 
 #########################################################################################
     # plot one lineout with good readable peaks (add simulation??)
-    simulation = np.load("perylene_sim_powderpattern.npy")
+    simulation = np.load(analysis_folder_path/"perylene_sim_powderpattern.npy")
     fig, ax = plt.subplots(figsize=figsize)
     fig.suptitle("Static (unpumped) lineout")
 
@@ -186,6 +187,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
         ax.axvline(qs[p], color="k")
 
     ax.plot(qs, lo_pumpoff, label="Pumpoff lineout")
+    ax.plot(qs, 0.2*lo_pumpoff*qs**2, label="Pumpoff lineout (q2-weighted)*0.2")
     q = np.linspace(0,6,5000)
     ax.plot(q, simulation*9e1, label="Simulated powderpattern \n(h, k and l from -8 to +8)")
     ax.set_xlabel(r"Scattering vector q /$\mathrm{\AA}^{-1}$")
@@ -217,7 +219,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
 
     for idx, lo in enumerate(los_norm):
         c = cmap(cm_norm(delay_times[idx])) #color proportional to delaytime
-        axs[0].plot(qs, lo, color=c)
+        axs[0].plot(qs, lo*0.2*qs**2, color=c)
         axs[1].plot(qs, (lo - lo_pumpoff_norm) / lo_pumpoff_norm, color=c)
         axs[2].plot(qs, los_rel[idx], color=c)
 

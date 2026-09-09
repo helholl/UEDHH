@@ -1,0 +1,5 @@
+- loadH5_first.py
+--> Tools/datapicker.py (strg+s save as json for loadH5_regular.py)
+- loadH5_regular.py
+- make poni with pyFAI
+- ayigral.py for analysis

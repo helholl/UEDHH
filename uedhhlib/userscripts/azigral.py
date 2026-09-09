@@ -21,20 +21,20 @@ from pathlib import Path
 from datetime import datetime
 from skued import biexponential, with_irf
 from scipy.optimize import curve_fit
-from uedhhlib.analysis.q2_weights import compute_q2_weight
+from uedhhlib.tools.q2_weights import compute_q2_weight
 
-analysis_folder_path = Path(r"Z:\Users\Emma\Zyla1\2026\2026_06\NT49\260619\NT49_Pos5_Perylene\Meas1_wohtpx\hlh_analysis")
-poni_name = "UEDPerylExp16_meanlongpumpoff.poni"
-mask_name = "peryl_exp16_mask_transp.npy"
-pumpedH5_name = "exp16_woarcs1stAnd2ndIteration_transposed.h5" #_transposed
-pdf_name = "Peryl_exp16_azigral_transp_q2weighted.pdf"
+analysis_folder_path = Path(r"Z:\Users\Emma\Zyla1\2026\2026_07\NT52\260731\Pos2_Au_Exp10\Meas2\hlh_analysis")
+poni_name = "Au_exp5.poni"
+mask_name = "Au_exp5_mask.npy"
+pumpedH5_name = "exp10_cyc1to9_woarcs.h5" 
+pdf_name = "Au_exp10.pdf"
 
 # set some variables
-t0_set = 35 #in ps, guess set by hand due to knowledge of measurement, for time axis setting
-fit_flag = False #set whether the transients shall be fitted
+t0_set = 20 #in ps, guess set by hand due to knowledge of measurement, for time axis setting
+fit_flag = True #set whether the transients shall be fitted
 #insert peaks (line 104) after first time azigral
 figsize = (16,9)
-pre_t0 = -10 # in ps compared to t0, for pre t0 mean normalization
+pre_t0 = -8 # in ps compared to t0, for pre t0 mean normalization
 n_post = 6 # number of images considered for post t0 mean
 norm_range_min = 4 #range in which the data is comparably constant i guess?
 norm_range_max = 7
@@ -143,7 +143,8 @@ print("all data is integrated")
 # for now identify peak position per hand. maybe peakfinder later
 # peaks = [2.80, 4.45, 5.65, 6.00, 6.30, 6.95, 7.18, 8.80] #in inverse angstrom
 # weird scale, therefore:
-peaks = [0.82, 1.3, 1.66, 1.825, 2.09, 2.575, 2.88, 3.32, 3.69, 4.55, 5.35] #in inverse angstrom
+peaks = [2.7, 3.12, 4.43, 5.15]
+#peaks = [0.82, 1.3, 1.66, 1.825, 2.09, 2.575, 2.88, 3.32, 3.69, 4.55, 5.35] #in inverse angstrom
 peaks_idx = [] #index in qs list
 for p in peaks:
     p_idx = np.abs(np.array(qs) - p).argmin()
@@ -158,8 +159,8 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
     fig.suptitle(f"HDF5 file: {pumpedH5_name}, azigral analysis: {now_formatted}, measuring time: {start_formatted} to {end_formatted}"), 
     axs = axs.flatten() # make list of array
 
-    axs[0].set_title("Mean long_pumpoff (weighted by q2)")
-    im0 = axs[0].imshow(long_pumpoff*q2_weight, cmap=cmap, vmin=0, vmax=np.percentile(long_pumpoff*q2_weight, 99))
+    axs[0].set_title("Mean long_pumpoff")
+    im0 = axs[0].imshow(long_pumpoff, cmap=cmap, vmin=0, vmax=np.percentile(long_pumpoff, 99)) #*q2_weight
     axs[0].imshow(mask, cmap=binary_cmap)
     axs[0].scatter(centerX-0.5, centerY-0.5, marker="x", s=20, color="g", label="Beam Center")
     axs[0].legend()
@@ -178,26 +179,26 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
 
 #########################################################################################
     # plot one lineout with good readable peaks (add simulation??)
-    simulation = np.load(analysis_folder_path/"perylene_sim_powderpattern.npy")
-    fig, ax = plt.subplots(figsize=figsize)
-    fig.suptitle("Static (unpumped) lineout")
+    # simulation = np.load(analysis_folder_path/"perylene_sim_powderpattern.npy")
+    # fig, ax = plt.subplots(figsize=figsize)
+    # fig.suptitle("Static (unpumped) lineout")
 
-    for p, roi in zip(peaks_idx, rois):
-        ax.axvspan(qs[roi].min(), qs[roi].max(), alpha=0.3, color="k", lw=0)
-        ax.axvline(qs[p], color="k")
+    # for p, roi in zip(peaks_idx, rois):
+    #     ax.axvspan(qs[roi].min(), qs[roi].max(), alpha=0.3, color="k", lw=0)
+    #     ax.axvline(qs[p], color="k")
 
-    ax.plot(qs, lo_pumpoff, label="Pumpoff lineout")
-    ax.plot(qs, 0.2*lo_pumpoff*qs**2, label="Pumpoff lineout (q2-weighted)*0.2")
-    q = np.linspace(0,6,5000)
-    ax.plot(q, simulation*9e1, label="Simulated powderpattern \n(h, k and l from -8 to +8)")
-    ax.set_xlabel(r"Scattering vector q /$\mathrm{\AA}^{-1}$")
-    ax.set_ylabel("Intensity /a.u.")
-    ax.set_xlim(xlim_min, xlim_max)
-    ax.set_ylim(0, 1000)
-    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
-    ax.legend()
-    fig.tight_layout()
-    pdf.savefig(fig)
+    # ax.plot(qs, lo_pumpoff, label="Pumpoff lineout")
+    # ax.plot(qs, 0.2*lo_pumpoff*qs**2, label="Pumpoff lineout (q2-weighted)*0.2")
+    # q = np.linspace(0,6,5000)
+    # ax.plot(q, simulation*9e1, label="Simulated powderpattern \n(h, k and l from -8 to +8)")
+    # ax.set_xlabel(r"Scattering vector q /$\mathrm{\AA}^{-1}$")
+    # ax.set_ylabel("Intensity /a.u.")
+    # ax.set_xlim(xlim_min, xlim_max)
+    # ax.set_ylim(0, 1000)
+    # ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    # ax.legend()
+    # fig.tight_layout()
+    # pdf.savefig(fig)
 
 
 #########################################################################################
@@ -219,7 +220,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
 
     for idx, lo in enumerate(los_norm):
         c = cmap(cm_norm(delay_times[idx])) #color proportional to delaytime
-        axs[0].plot(qs, lo*0.2*qs**2, color=c)
+        axs[0].plot(qs, lo, color=c)
         axs[1].plot(qs, (lo - lo_pumpoff_norm) / lo_pumpoff_norm, color=c)
         axs[2].plot(qs, los_rel[idx], color=c)
 
@@ -244,7 +245,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
 #########################################################################################
     #plot transients of peaks
 
-    fig, axs = plt.subplots(4,3, figsize=figsize, sharex=True)
+    fig, axs = plt.subplots(2,2, figsize=figsize, sharex=True)
     fig.suptitle(f"Peak transients, normalized to first {pre_t0} ps")
 
     for ax in axs[-1]: #get last ax in each column
@@ -267,7 +268,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
                            color="grey",
                            linewidth=1,
                            zorder=-10,
-                           label=f"t0={t0_fit:.1f}"
+                           label=f"fitted t0={t0_fit:.1f}"
                 )
                 ax.plot(delay_times, best_fit_curve, color="silver", lw=3, 
                         label=r"$\{\tau\}=\{"
@@ -279,7 +280,7 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
                 print(f"fit failed at q={qs[peaks[i]]:.2f} A^-1")
 
         ax.axvspan(delay_times[:pre_idx].min(), delay_times[:pre_idx].max(), alpha=0.3, color="silver", label="Used for norm.")
-        ax.axhline(np.mean(intgr[:pre_idx]), color="r", label="average, 1??")
+        #ax.axhline(np.mean(intgr[:pre_idx]), color="r", label="average, 1??")
         ax.plot(delay_times, intgr, zorder=5, color="k")
         ax.axvline(0, color="silver")
         ax.scatter(delay_times, intgr, color=cmap(np.linspace(0, 1, len(delay_times))), zorder=10)

@@ -117,7 +117,7 @@ class DataPicker(QtWidgets.QMainWindow):
     @pyqtSlot()
     def add_lri(self):
         total_duration = self.timestamps[-1] - self.timestamps[0]
-        width = int(total_duration / 10) #10% of the measurement duration
+        width = int(total_duration / 50) #10% of the measurement duration
         if not self.lris:
             mi = self.timestamps[0]
             ma = mi + width

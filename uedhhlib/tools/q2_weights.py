@@ -43,7 +43,7 @@ def compute_q2_weight(
         raise ValueError("Enter poni file or center coordinates")
     if poni_file is not None:
         poni = pyFAI.load(poni_file)
-        q_map = poni.array_from_unit(diff_img.shape(), unit="q_A^-1")
+        q_map = poni.array_from_unit(diff_img.shape, unit="q_A^-1")
         
     else: 
         cx, cy = center_px
@@ -56,4 +56,4 @@ def compute_q2_weight(
 
     q_safe = np.where(q_map<0, q_map, np.nan)
     
-    return(q_safe)
+    return(q_map)

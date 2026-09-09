@@ -1,3 +1,3 @@
-from uedhhlib.tools import electron_wavelength_from_energy
+from uedhhlib.tools.wavelength_from_energy_calc import electron_wavelength_from_energy
 
 print(electron_wavelength_from_energy(80000))

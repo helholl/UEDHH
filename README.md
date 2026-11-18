@@ -1,7 +1,15 @@
 # uedhhlib
 
-- is a package containing dataset.py which is the class definition for electron diffraction datasets (recorded at MPSD - November 24) and utils.py which is a collection of tools to analyze the data. 
+- is a package to analyze electron diffraction datasets (recorded at the Schweppes group at the MPSD Hamburg)
 
+The main class is PumpedDataset which is used to convert a multitude of diffraction images into a h5 file. Subsequently the unpredictable electron sparcs must be filtered by hand and a new h5 file must be created, ignoring the images during sparcs. All this is collected in "ued_workflow.py" (or "ued_workflow.ipynb") under userscripts.
+
+When the final h5 file is created the analysis varies, depending on the sample:
+
+- Polycrystalline sample:
+    1. get .poni file by opening pyfai-calib2 and using the mean_long_pumpoff.npy 
+    (wavelength: 4.175716074647679e-2 Angström)
+    2. run azigral.py script
 - data_picker.py is a tool to manually check for arcs in the overall intensity of all images and extract a list of files to ignore during loading
 
 

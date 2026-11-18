@@ -19,8 +19,8 @@ import pyFAI
 import h5py
 from pathlib import Path
 from datetime import datetime
-from skued import biexponential, with_irf
 from scipy.optimize import curve_fit
+from uedhhlib.fitting import biexp_irf_fit
 from uedhhlib.tools.q2_weights import compute_q2_weight
 
 analysis_folder_path = Path(r"Z:\Users\Emma\Zyla1\2026\2026_07\NT52\260731\Pos2_Au_Exp10\Meas2\hlh_analysis")
@@ -42,21 +42,6 @@ integr_width = 0.05 # width around which the peaks are integrated to get transie
 radial_range=(0.6, 6)
 xlim_min, xlim_max = 0.6, 6.2
 
-############################################
-# fit function for transients
-def irf_fit(time, *args, **kwargs):
-    """
-    fit function for biexponendtial transients. Use skued biexp. fit
-
-    args: tuple 
-        (time_resolution, t0_fit, amp1, amp2, tconst1, tconst2, offset)
-
-    """
-    args = list(args)
-    #args[4] = 0.35  # set the decay time constant
-    # args[0] = 0.01  # set the IRF
-    args = tuple(args)
-    return with_irf(np.abs(args[0]))(biexponential)(time, *args[1:], **kwargs)
 ############################################
 
 # load data 
@@ -260,9 +245,9 @@ with PdfPages(analysis_folder_path/ pdf_name) as pdf:
             try:
                 bounds = ([0,    -np.inf, -np.inf, -np.inf, 0,   0,   -np.inf],  # lower
                           [np.inf, np.inf,  np.inf,  np.inf, np.inf, np.inf,  np.inf])   # upper
-                params, _ = curve_fit(irf_fit, delay_times, intgr, p0=initial_guess, bounds=bounds)
+                params, _ = curve_fit(biexp_irf_fit, delay_times, intgr, p0=initial_guess, bounds=bounds)
                 time_resolution, t0_fit, amp1, amp2, tconst1, tconst2, offset = params
-                best_fit_curve = irf_fit(delay_times, *params)
+                best_fit_curve = biexp_irf_fit(delay_times, *params)
                 ax.axvline(t0_fit,
                            linestyle="--",
                            color="grey",

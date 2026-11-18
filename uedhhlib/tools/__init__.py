@@ -16,6 +16,8 @@ from .datapicker import DataPicker
 
 from .copy_files import copy_all_txt_files
 
+from .hotpixel_filter import remove_hpx_from_dataset
+
 
 __all__ = [
     'electron_wavelength_from_energy'

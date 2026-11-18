@@ -16,6 +16,9 @@ dependencies = [
     "h5py",
     "scipy",
     "lmfit",
+    "pandas",
+    "pyqtgraph",
+    "scikit-ued"
 ]
 
 [tool.setuptools.packages.find]

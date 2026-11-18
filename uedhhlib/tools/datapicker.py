@@ -9,6 +9,8 @@ from re import findall
 from datetime import datetime
 import json
 from pathlib import Path
+import sys
+import pandas as pd
 
 from argparse import ArgumentParser
 
@@ -199,8 +201,6 @@ class DataPicker(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    import sys
-    import pandas as pd
     
     args = parse_args()
     df = pd.read_hdf(args.filepath, key="file_registry")

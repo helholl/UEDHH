@@ -85,3 +85,17 @@ def save_file_registry(filename, registry, basedir):
     #basedir as metadata to be able to reconstruct filepaths with rel filepaths
     with pd.HDFStore(filename, mode="a") as store:
         store.get_storer("file_registry").attrs.basedir = basedir
+
+def save_mean_pumpoff_long(ds, filename):
+    """
+    saves mean_pumpoff_long from a pumped dataset as .npy file. This should be used for pyfai-calib2
+
+    Parameters
+    ----------
+    ds : PumpedDataset object
+        uedhhlib dataset object
+    filename : PathLike
+        filename and path in which the npy file should be stored
+    """
+    mean_pumpoff_long = ds.pumpoff_long
+    np.save(filename, mean_pumpoff_long)

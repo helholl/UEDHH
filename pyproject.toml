@@ -17,8 +17,8 @@ dependencies = [
     "scipy",
     "lmfit",
     "pandas",
-    "pyqtgraph",
-    "scikit-ued"
+    "PyQt5",
+    "pyqtgraph"
 ]
 
 [tool.setuptools.packages.find]

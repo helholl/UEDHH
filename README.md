@@ -1,30 +1,56 @@
 # uedhhlib
 
-- is a package to analyze electron diffraction datasets (recorded at the Schweppes group at the MPSD Hamburg)
+`uedhhlib` is a package to analyze electron diffraction datasets (recorded at the Schweppes group at the MPSD Hamburg).
 
 
 ## Installation
 
 You can install `uedhhlib` either using **Conda** or standard **Python virtual environments (`venv`)**.
-
-### Prerequisites
 Make sure you have either [Miniforge/Anaconda](https://github.com/conda-forge/miniforge) or a standard [Python](https://www.python.org/) (>= 3.8) installation on your system.
 
----
+First, clone the repository and navigate into the project directory:
 
-### Option A: Using Conda (Recommended)
+```bash
+git clone https://github.com/helholl/UEDHH.git
+cd uedhhlib
+```
 
-1. Clone the repository and navigate to the project root directory:
-   ```bash
-   git clone <repository-url>
-   cd uedhhlib
+### Option 1: Using Conda (Recommended)
 
+Create the uedhh_env environment from the environment.yml file. This will automatically install all dependencies and uedhhlib in editable mode (-e .), so local changes to the source code take effect immediately:
+
+```bash
+conda env create -f environment.yml
+conda activate uedhh_env
+```
+
+### Option 2: Using pip
+
+If you prefer using an existing Python environment (or your own venv / conda environment, Python >=3.8), you can install the package directly via pyproject.toml. For development (so changes to the source code are reflected without reinstalling), install in editable mode:
+
+```bash
+pip install -e .
+```
+
+(Optional) You can also install uedhhlib directly from Git without cloning the repository first:
+
+```bash
+pip install "uedhhlib @ git+https://github.com/helholl/UEDHH.git"
+```
+
+### Verify Installation
+
+Check that the package can be imported properly:
+
+```bash
+python -c "import uedhhlib; print(uedhhlib.__file__)"
+```
 
 ## How to use
 
 The main class is PumpedDataset which is used to convert a multitude of diffraction images into a h5 file. Subsequently the unpredictable electron sparcs must be filtered by hand and a new h5 file must be created, ignoring the images during sparcs. All this is collected in "ued_workflow.py" (or "ued_workflow.ipynb") in userscripts.
 
-When the final h5 file is created the analysis varies, depending on the sample:
+After the final h5 file is created the following analysis varies, depending on the sample:
 
 1. Polycrystalline sample:
     - get the center of the diffraction rings by using pyfai-calib2 and saving the .poni file. 

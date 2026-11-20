@@ -98,4 +98,6 @@ def save_mean_pumpoff_long(ds, filename):
         filename and path in which the npy file should be stored
     """
     mean_pumpoff_long = ds.pumpoff_long
+    output_file = Path(filename)
+    output_file.parent.mkdir(exist_ok=True, parents=True)
     np.save(filename, mean_pumpoff_long)

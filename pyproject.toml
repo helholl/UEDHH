@@ -18,7 +18,8 @@ dependencies = [
     "lmfit",
     "pandas",
     "PyQt5",
-    "pyqtgraph"
+    "pyqtgraph",
+    "pytables"
 ]
 
 [tool.setuptools.packages.find]

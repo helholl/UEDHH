@@ -16,7 +16,7 @@ dependencies = [
     "h5py",
     "scipy",
     "lmfit",
-    "pandas",
+    "pandas==3.0.1",
     "PyQt5",
     "pyqtgraph",
     "pytables"

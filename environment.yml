@@ -5,6 +5,6 @@ dependencies:
   - python>=3.8
   - pip
   - scikit-ued
-  - ipykernel
+  - pyfai
   - pip:
     - -e .

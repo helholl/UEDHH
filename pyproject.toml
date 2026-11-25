@@ -19,7 +19,7 @@ dependencies = [
     "pandas==3.0.1",
     "PyQt5",
     "pyqtgraph",
-    "pytables"
+    "tables"
 ]
 
 [tool.setuptools.packages.find]
